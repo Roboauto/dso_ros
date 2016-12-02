@@ -8,7 +8,7 @@ include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 #  Release        : w/o debug symbols, w/ optimization
 #  RelWithDebInfo : w/ debug symbols, w/ optimization
 #  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
-set(ROS_BUILD_TYPE Release)
+set(ROS_BUILD_TYPE Debug)
 
 rosbuild_init()
 
@@ -34,7 +34,7 @@ find_library(DSO_LIBRARY dso ${DSO_PATH}/build/lib)
 # SSE flags
 rosbuild_check_for_sse()
 set(CMAKE_CXX_FLAGS
-   "${SSE_FLAGS} -O2 -g -std=c++0x -fno-omit-frame-pointer"
+   "${SSE_FLAGS} -O2 -g -std=c++14 -fno-omit-frame-pointer"
 )
 
 set(SOURCE_FILES         

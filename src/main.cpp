@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <memory>
 
 #include "util/settings.h"
 #include "FullSystem/FullSystem.h"
@@ -133,8 +134,8 @@ void parseArgument(char* arg)
 
 
 
-FullSystem* fullSystem = 0;
-Undistort* undistorter = 0;
+std::unique_ptr<FullSystem> fullSystem;
+std::unique_ptr<Undistort> undistorter;
 int frameID = 0;
 
 void vidCb(const sensor_msgs::ImageConstPtr img)
@@ -147,9 +148,8 @@ void vidCb(const sensor_msgs::ImageConstPtr img)
 	if(setting_fullResetRequested)
 	{
 		std::vector<IOWrap::Output3DWrapper*> wraps = fullSystem->outputWrapper;
-		delete fullSystem;
 		for(IOWrap::Output3DWrapper* ow : wraps) ow->reset();
-		fullSystem = new FullSystem();
+		fullSystem = std::make_unique<FullSystem>();
 		fullSystem->linearizeOperation=false;
 		fullSystem->outputWrapper = wraps;
 	    if(undistorter->photometricUndist != 0)
@@ -193,9 +193,7 @@ int main( int argc, char** argv )
 	setting_affineOptModeA = 0;
 	setting_affineOptModeB = 0;
 
-
-
-    undistorter = Undistort::getUndistorterForFile(calib, gammaFile, vignetteFile);
+    undistorter.reset(Undistort::getUndistorterForFile(calib, gammaFile, vignetteFile));
 
     setGlobalCalib(
             (int)undistorter->getSize()[0],
@@ -203,7 +201,7 @@ int main( int argc, char** argv )
             undistorter->getK().cast<float>());
 
 
-    fullSystem = new FullSystem();
+    fullSystem = std::make_unique<FullSystem>();
     fullSystem->linearizeOperation=false;
 
 
@@ -211,7 +209,6 @@ int main( int argc, char** argv )
 	    fullSystem->outputWrapper.push_back(new IOWrap::PangolinDSOViewer(
 	    		 (int)undistorter->getSize()[0],
 	    		 (int)undistorter->getSize()[1]));
-
 
     if(useSampleOutput)
         fullSystem->outputWrapper.push_back(new IOWrap::SampleOutputWrapper());
@@ -230,9 +227,6 @@ int main( int argc, char** argv )
         ow->join();
         delete ow;
     }
-
-    delete undistorter;
-    delete fullSystem;
 
 	return 0;
 }
