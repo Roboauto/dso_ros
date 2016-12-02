@@ -221,7 +221,7 @@ int main( int argc, char** argv )
     	fullSystem->setGammaFunction(undistorter->photometricUndist->getG());
 
     ros::NodeHandle nh;
-    ros::Subscriber imgSub = nh.subscribe("image", 1, &vidCb);
+    ros::Subscriber imgSub = nh.subscribe("/robo/camera/image_color", 1, &vidCb);
 
     ros::spin();
 
