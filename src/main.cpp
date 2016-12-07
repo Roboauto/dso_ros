@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <memory>
+#include <fstream>
 
 #include "util/settings.h"
 #include "FullSystem/FullSystem.h"
@@ -132,11 +133,11 @@ void parseArgument(char* arg)
 }
 
 
-
-
 std::unique_ptr<FullSystem> fullSystem;
 std::unique_ptr<Undistort> undistorter;
 int frameID = 0;
+
+cv::Mat cameraMatrix;
 
 void vidCb(const sensor_msgs::ImageConstPtr img)
 {
@@ -157,7 +158,11 @@ void vidCb(const sensor_msgs::ImageConstPtr img)
 		setting_fullResetRequested=false;
 	}
 
-	MinimalImageB minImg((int)cv_ptr->image.cols, (int)cv_ptr->image.rows,(unsigned char*)cv_ptr->image.data);
+    cv::Mat resized;
+    cv::resize(cv_ptr->image, resized, cv::Size(1280, 960));
+    //cv::Mat cropped = resized(cv::Rect(0, 0, 640, 360));
+
+	MinimalImageB minImg(resized.cols, resized.rows,(unsigned char*) resized.data);
 	ImageAndExposure* undistImg = undistorter->undistort<unsigned char>(&minImg, 1,0, 1.0f);
 	fullSystem->addActiveFrame(undistImg, frameID);
 	frameID++;
@@ -165,18 +170,23 @@ void vidCb(const sensor_msgs::ImageConstPtr img)
 
 }
 
-
-
-
-
 int main( int argc, char** argv )
 {
 	ros::init(argc, argv, "dso_live");
 
+	for(int i = 1; i < argc; i++)
+        parseArgument(argv[i]);
 
+    {
+        std::ifstream ifs(calib);
+        cv::Mat matrix = cv::Mat::zeros(3, 3, CV_64F);
 
-	for(int i=1; i<argc;i++) parseArgument(argv[i]);
+        if(!(ifs >> matrix.at<float>(0, 0) >> matrix.at<float>(1, 1)
+                 >> matrix.at<float>(2, 0) >> matrix.at<float>(2, 1)))
+            throw std::logic_error("invalid calib");
 
+        cameraMatrix = matrix;
+    }
 
 	setting_desiredImmatureDensity = 1000;
 	setting_desiredPointDensity = 1200;
