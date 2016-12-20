@@ -45,8 +45,12 @@
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <image_transport/image_transport.h>
+
 #include "cv_bridge/cv_bridge.h"
 
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 std::string calib = "";
 std::string vignetteFile = "";
@@ -137,14 +141,47 @@ std::unique_ptr<FullSystem> fullSystem;
 std::unique_ptr<Undistort> undistorter;
 int frameID = 0;
 
-cv::Mat cameraMatrix;
+cv::Mat_<double> cameraMatrix;
+
+const cv::Size imageSize(1280, 960);
 
 void vidCb(const sensor_msgs::ImageConstPtr img)
 {
 	cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
-	assert(cv_ptr->image.type() == CV_8U);
-	assert(cv_ptr->image.channels() == 1);
+    //cv::Rect rect(imageSize.width / 4, imageSize.height / 4, imageSize.width / 2, imageSize.height / 2);
+    //auto tmp = cv_ptr->image(rect);
+    //tmp.copyTo(cv_ptr->image);
+    //cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480));
 
+    //cv::namedWindow("Cropped", cv::WINDOW_AUTOSIZE);
+    //cv::imshow("Cropped", cv_ptr->image);
+    //cv::waitKey(0);
+
+    {
+        cv::Mat orig, undist;
+        cv_ptr->image.copyTo(orig);
+        //cv::undistort(orig, undist, cameraMatrix, cv::InputArray(std::vector<double>{-0.36846, 0.20339000000000002, -0.0014700000000000002, 0.00151}));
+        cv::undistort(orig, undist, cameraMatrix, cv::InputArray(std::vector<double>{-0.375296, 0.188019, 0.000203, -0.000602}));
+
+        cv::Mat diff;
+        cv::resize(orig, orig, imageSize / 2);
+        cv::resize(undist, undist, imageSize / 2);
+        cv::absdiff(orig, undist, diff);
+
+        cv::Mat output;
+        cv::hconcat(orig, undist, output);
+        cv::hconcat(output, diff, output);
+
+        cv::namedWindow("Undistorted", cv::WINDOW_AUTOSIZE);
+        cv::imshow("Undistorted", output);
+        cv::waitKey(0);
+    }
+
+    //return;
+
+    //cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480));
+    assert(cv_ptr->image.type() == CV_8U);
+	assert(cv_ptr->image.channels() == 1);
 
 	if(setting_fullResetRequested)
 	{
@@ -158,11 +195,7 @@ void vidCb(const sensor_msgs::ImageConstPtr img)
 		setting_fullResetRequested=false;
 	}
 
-    cv::Mat resized;
-    cv::resize(cv_ptr->image, resized, cv::Size(1280, 960));
-    //cv::Mat cropped = resized(cv::Rect(0, 0, 640, 360));
-
-	MinimalImageB minImg(resized.cols, resized.rows,(unsigned char*) resized.data);
+    MinimalImageB minImg(cv_ptr->image.cols, cv_ptr->image.rows, (unsigned char*) cv_ptr->image.data);
 	ImageAndExposure* undistImg = undistorter->undistort<unsigned char>(&minImg, 1,0, 1.0f);
 	fullSystem->addActiveFrame(undistImg, frameID);
 	frameID++;
@@ -179,13 +212,21 @@ int main( int argc, char** argv )
 
     {
         std::ifstream ifs(calib);
-        cv::Mat matrix = cv::Mat::zeros(3, 3, CV_64F);
+        cv::Mat_<double> matrix = cv::Mat_<double>::zeros(3, 3);
+        float fx, fy, cx, cy;
 
-        if(!(ifs >> matrix.at<float>(0, 0) >> matrix.at<float>(1, 1)
-                 >> matrix.at<float>(2, 0) >> matrix.at<float>(2, 1)))
+        if(!(ifs >> fx >> fy >> cx >> cy))
             throw std::logic_error("invalid calib");
 
+        matrix.at<double>(0, 0) = imageSize.width * fx;
+        matrix.at<double>(1, 1) = imageSize.height * fy;
+        matrix.at<double>(0, 2) = imageSize.width * cx - 0.5;
+        matrix.at<double>(1, 2) = imageSize.height * cy - 0.5;
+        matrix.at<double>(2, 2) = 1;
+
         cameraMatrix = matrix;
+
+        std::cout << "Camera matrix: " << cameraMatrix << std::endl;
     }
 
 	setting_desiredImmatureDensity = 1000;
